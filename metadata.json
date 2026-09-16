@@ -1,0 +1,6 @@
+{
+  "name": "StudySync",
+  "description": "A college DBMS project to manage tasks and detect overlapping deadlines using Node.js, Express, and MySQL.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
