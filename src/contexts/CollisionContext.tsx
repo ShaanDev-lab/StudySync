@@ -1,4 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, type FormEvent, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useUser } from "@clerk/react";
 
 export interface Subject {
@@ -81,7 +90,6 @@ export const getRelativeTime = (dateString: string) => {
   return `In ${diffDays} days`;
 };
 
-
 interface CollisionContextType {
   tasks: Task[];
   clashes: Clash[];
@@ -109,13 +117,21 @@ interface CollisionContextType {
   handleDelete: (id: number, title: string) => void;
   confirmDelete: () => Promise<void>;
   isClashing: (taskId: number) => boolean;
-  handleSuggestion: (suggestionId: number, action: "accept" | "reject") => Promise<void>;
+  handleSuggestion: (
+    suggestionId: number,
+    action: "accept" | "reject",
+  ) => Promise<void>;
   toggleTaskStatus: (taskId: number) => Promise<void>;
-  logPomodoroSession: (taskId: number, durationMinutes: number) => Promise<void>;
+  logPomodoroSession: (
+    taskId: number,
+    durationMinutes: number,
+  ) => Promise<void>;
   fetchWeeklyStats: () => Promise<void>;
 }
 
-const CollisionContext = createContext<CollisionContextType | undefined>(undefined);
+const CollisionContext = createContext<CollisionContextType | undefined>(
+  undefined,
+);
 
 export function CollisionProvider({ children }: { children: ReactNode }) {
   const { user } = useUser();
@@ -134,15 +150,20 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
   const [formData, setFormData] = useState<TaskFormState>(emptyFormState);
   const [weeklyStats, setWeeklyStats] = useState<Record<number, number>>({});
 
-  const apiFetch = async (url: string, options: RequestInit = {}) => {
-    const headers = {
-      ...options.headers,
-      "x-user-email": user?.primaryEmailAddress?.emailAddress || "",
-    };
-    return fetch(url, { ...options, headers });
-  };
+  const userEmail = user?.primaryEmailAddress?.emailAddress || "";
 
-  const syncUser = async () => {
+  const apiFetch = useCallback(
+    async (url: string, options: RequestInit = {}) => {
+      const headers = {
+        ...options.headers,
+        "x-user-email": userEmail,
+      };
+      return fetch(url, { ...options, headers });
+    },
+    [userEmail],
+  );
+
+  const syncUser = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -157,9 +178,9 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("User sync failed", err);
     }
-  };
+  }, [user, apiFetch]);
 
-  const fetchSubjects = async () => {
+  const fetchSubjects = useCallback(async () => {
     try {
       const res = await apiFetch("/api/subjects");
       if (res.ok) {
@@ -169,9 +190,9 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Failed to fetch subjects", err);
     }
-  };
+  }, [apiFetch]);
 
-  const checkClashes = async () => {
+  const checkClashes = useCallback(async () => {
     try {
       const response = await apiFetch("/api/tasks/detect-clashes");
       if (response.ok) {
@@ -187,9 +208,26 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Clash detection failed", err);
     }
-  };
+  }, [apiFetch]);
 
-  const fetchTasks = async () => {
+  const fetchWeeklyStats = useCallback(async () => {
+    try {
+      const res = await apiFetch("/api/pomodoro/weekly-stats");
+      if (res.ok) {
+        const data: { task_id: number; total_minutes: number }[] =
+          await res.json();
+        const map: Record<number, number> = {};
+        for (const item of data) {
+          map[item.task_id] = item.total_minutes;
+        }
+        setWeeklyStats(map);
+      }
+    } catch (err) {
+      console.error("Failed to fetch weekly stats", err);
+    }
+  }, [apiFetch]);
+
+  const fetchTasks = useCallback(async () => {
     try {
       const response = await apiFetch("/api/tasks");
       const data = await response.json();
@@ -200,93 +238,83 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
 
       setTasks(data);
       setError(null);
-      await Promise.all([checkClashes(), fetchSubjects(), fetchWeeklyStats()]);
+      await Promise.all([checkClashes(), fetchWeeklyStats()]);
     } catch (err: any) {
       setError(err.message || "Could not connect to the database server.");
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiFetch, checkClashes, fetchWeeklyStats]);
 
-  const fetchWeeklyStats = async () => {
-    try {
-      const res = await apiFetch("/api/pomodoro/weekly-stats");
-      if (res.ok) {
-        const data: { task_id: number; total_minutes: number }[] = await res.json();
-        const map: Record<number, number> = {};
-        for (const item of data) {
-          map[item.task_id] = item.total_minutes;
+  const toggleTaskStatus = useCallback(
+    async (taskId: number) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const newStatus = task.status === "Completed" ? "Pending" : "Completed";
+
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
+      );
+
+      try {
+        const res = await apiFetch(`/api/tasks/${taskId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (!res.ok) {
+          await fetchTasks();
         }
-        setWeeklyStats(map);
-      }
-    } catch (err) {
-      console.error("Failed to fetch weekly stats", err);
-    }
-  };
-
-  const toggleTaskStatus = async (taskId: number) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    const newStatus = task.status === "Completed" ? "Pending" : "Completed";
-
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
-    );
-
-    try {
-      const res = await apiFetch(`/api/tasks/${taskId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) {
+      } catch (err) {
+        console.error("Failed to toggle task status", err);
         await fetchTasks();
       }
-    } catch (err) {
-      console.error("Failed to toggle task status", err);
-      await fetchTasks();
-    }
-  };
+    },
+    [tasks, apiFetch, fetchTasks],
+  );
 
-  const logPomodoroSession = async (taskId: number, durationMinutes: number) => {
-    try {
-      const res = await apiFetch("/api/pomodoro/log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId, durationMinutes }),
-      });
-      if (res.ok) {
-        await fetchWeeklyStats();
+  const logPomodoroSession = useCallback(
+    async (taskId: number, durationMinutes: number) => {
+      try {
+        const res = await apiFetch("/api/pomodoro/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId, durationMinutes }),
+        });
+        if (res.ok) {
+          await fetchWeeklyStats();
+        }
+      } catch (err) {
+        console.error("Failed to log pomodoro session", err);
       }
-    } catch (err) {
-      console.error("Failed to log pomodoro session", err);
-    }
-  };
+    },
+    [apiFetch, fetchWeeklyStats],
+  );
 
   useEffect(() => {
     if (!user) return;
 
     void (async () => {
       await syncUser();
-      await fetchTasks();
+      await Promise.all([fetchTasks(), fetchSubjects()]);
     })();
-  }, [user]);
+  }, [user, syncUser, fetchTasks, fetchSubjects]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData({
       ...emptyFormState,
       subject_id: subjects[0]?.subject_id?.toString() || "",
     });
-  };
+  }, [subjects]);
 
-  const openCreateTask = () => {
+  const openCreateTask = useCallback(() => {
     setEditingTask(null);
     resetForm();
     setShowForm(true);
-  };
+  }, [resetForm]);
 
-  const startEdit = (task: Task) => {
+  const startEdit = useCallback((task: Task) => {
     setEditingTask(task);
     setFormData({
       title: task.title,
@@ -297,84 +325,88 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
       subject_id: task.subject_id ? task.subject_id.toString() : "",
     });
     setShowForm(true);
-  };
+  }, []);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
 
-    try {
-      const url = editingTask ? `/api/tasks/${editingTask.id}` : "/api/tasks";
-      const method = editingTask ? "PUT" : "POST";
+      try {
+        const url = editingTask ? `/api/tasks/${editingTask.id}` : "/api/tasks";
+        const method = editingTask ? "PUT" : "POST";
 
-      const response = await apiFetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
+        const response = await apiFetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
 
-      if (!response.ok) throw new Error("Failed to save task");
+        if (!response.ok) throw new Error("Failed to save task");
 
-      resetForm();
-      setShowForm(false);
-      setEditingTask(null);
-      await fetchTasks();
-    } catch (err: any) {
-      console.error("Submit failed:", err);
-      alert(
-        "Error: " +
-          (err.message || "Make sure your server/MySQL is running properly."),
-      );
-    }
-  };
-
-  const handleAddSubject = async (e: FormEvent) => {
-    e.preventDefault();
-
-    if (!newSubjectName.trim()) return;
-
-    try {
-      const res = await apiFetch("/api/subjects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newSubjectName }),
-      });
-
-      if (res.ok) {
-        setNewSubjectName("");
-        await fetchSubjects();
+        resetForm();
+        setShowForm(false);
+        setEditingTask(null);
+        await fetchTasks();
+      } catch (err: any) {
+        console.error("Submit failed:", err);
+        setError(
+          err.message || "Make sure your server/MySQL is running properly.",
+        );
       }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    },
+    [editingTask, apiFetch, formData, resetForm, fetchTasks],
+  );
 
-  const handleDeleteSubject = (id: number, name: string) => {
+  const handleAddSubject = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+
+      if (!newSubjectName.trim()) return;
+
+      try {
+        const res = await apiFetch("/api/subjects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newSubjectName }),
+        });
+
+        if (res.ok) {
+          setNewSubjectName("");
+          await fetchSubjects();
+        }
+      } catch (err) {
+        console.error("Add subject failed:", err);
+      }
+    },
+    [newSubjectName, apiFetch, fetchSubjects],
+  );
+
+  const handleDeleteSubject = useCallback((id: number, name: string) => {
     setDeleteConfirmation({
       isOpen: true,
       type: "subject",
       id,
       title: name,
     });
-  };
+  }, []);
 
-  const handleDelete = (id: number, title: string) => {
+  const handleDelete = useCallback((id: number, title: string) => {
     setDeleteConfirmation({
       isOpen: true,
       type: "task",
       id,
       title,
     });
-  };
+  }, []);
 
-  const confirmDelete = async () => {
+  const confirmDelete = useCallback(async () => {
     const { type, id } = deleteConfirmation;
     if (!type || id === null) return;
 
     try {
       if (type === "subject") {
         await apiFetch(`/api/subjects/${id}`, { method: "DELETE" });
-        await fetchSubjects();
-        await fetchTasks();
+        await Promise.all([fetchSubjects(), fetchTasks()]);
       } else if (type === "task") {
         await apiFetch(`/api/tasks/${id}`, { method: "DELETE" });
         await fetchTasks();
@@ -382,34 +414,40 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
 
       setDeleteConfirmation(emptyDeleteState);
     } catch (err) {
-      console.error(err);
+      console.error("Delete confirmed failed:", err);
     }
-  };
+  }, [deleteConfirmation, apiFetch, fetchSubjects, fetchTasks]);
 
-  const isClashing = (taskId: number) =>
-    clashes.some(
-      (clash) => clash.task1_id === taskId || clash.task2_id === taskId,
-    );
+  const isClashing = useCallback(
+    (taskId: number) =>
+      clashes.some(
+        (clash) => clash.task1_id === taskId || clash.task2_id === taskId,
+      ),
+    [clashes],
+  );
 
-  const handleSuggestion = async (
-    suggestionId: number,
-    action: "accept" | "reject",
-  ) => {
-    try {
-      const res = await apiFetch(`/api/suggestions/${suggestionId}/${action}`, {
-        method: "POST",
-      });
+  const handleSuggestion = useCallback(
+    async (suggestionId: number, action: "accept" | "reject") => {
+      try {
+        const res = await apiFetch(
+          `/api/suggestions/${suggestionId}/${action}`,
+          {
+            method: "POST",
+          },
+        );
 
-      if (res.ok) {
-        await fetchTasks();
+        if (res.ok) {
+          await fetchTasks();
+        }
+      } catch (err) {
+        console.error(`Failed to ${action} suggestion`, err);
       }
-    } catch (err) {
-      console.error(`Failed to ${action} suggestion`, err);
-    }
-  };
+    },
+    [apiFetch, fetchTasks],
+  );
 
-  return (
-    <CollisionContext.Provider value={{
+  const contextValue = useMemo<CollisionContextType>(
+    () => ({
       tasks,
       clashes,
       suggestions,
@@ -440,7 +478,38 @@ export function CollisionProvider({ children }: { children: ReactNode }) {
       toggleTaskStatus,
       logPomodoroSession,
       fetchWeeklyStats,
-    }}>
+    }),
+    [
+      tasks,
+      clashes,
+      suggestions,
+      loading,
+      showForm,
+      editingTask,
+      error,
+      subjects,
+      showSubjectForm,
+      newSubjectName,
+      deleteConfirmation,
+      formData,
+      weeklyStats,
+      openCreateTask,
+      startEdit,
+      handleSubmit,
+      handleAddSubject,
+      handleDeleteSubject,
+      handleDelete,
+      confirmDelete,
+      isClashing,
+      handleSuggestion,
+      toggleTaskStatus,
+      logPomodoroSession,
+      fetchWeeklyStats,
+    ],
+  );
+
+  return (
+    <CollisionContext.Provider value={contextValue}>
       {children}
     </CollisionContext.Provider>
   );

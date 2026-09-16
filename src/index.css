@@ -11,3 +11,19 @@
     @apply bg-white text-black font-sans antialiased selection:bg-black selection:text-white dark:bg-black dark:text-white dark:selection:bg-white dark:selection:text-black;
   }
 }
+
+@layer utilities {
+  .neo-shadow {
+    box-shadow: 8px 8px 0px 0px rgba(0, 0, 0, 1);
+  }
+  :where(.dark, .dark *) .neo-shadow {
+    box-shadow: 8px 8px 0px 0px rgba(255, 255, 255, 1);
+  }
+
+  .neo-shadow-sm {
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1);
+  }
+  :where(.dark, .dark *) .neo-shadow-sm {
+    box-shadow: 4px 4px 0px 0px rgba(255, 255, 255, 1);
+  }
+}

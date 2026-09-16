@@ -1,46 +1,56 @@
-import React from "react";
+import { useMemo } from "react";
 import { Show } from "@clerk/react";
 import Navbar from "../components/common/Navbar";
 import LoginPage from "./LoginPage";
 import { useCollisionData } from "../contexts/CollisionContext";
 import { PieChart, TrendingUp, AlertTriangle, Layers } from "lucide-react";
 
+const CATEGORIES = ["Assignment", "Exam", "Project", "Quiz", "General"] as const;
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Assignment: "bg-blue-400",
+  Exam: "bg-red-400",
+  Project: "bg-purple-400",
+  Quiz: "bg-pink-400",
+  General: "bg-neutral-400",
+};
+
+const PRIORITY_COLORS: Record<string, string> = {
+  "Critical (≥20)": "bg-red-500",
+  "Moderate (10-19)": "bg-yellow-400",
+  "Routine (<10)": "bg-emerald-400",
+};
+
 export default function AnalyticsPage() {
   const dashboard = useCollisionData();
 
   const totalTasks = dashboard.tasks.length;
-  
-  // Category Stats
-  const categories = ["Assignment", "Exam", "Project", "Quiz", "General"];
-  const categoryCounts = categories.reduce((acc, cat) => {
-    acc[cat] = dashboard.tasks.filter(t => t.category === cat).length;
-    return acc;
-  }, {} as Record<string, number>);
 
-  const maxCategoryCount = Math.max(...Object.values(categoryCounts), 1);
+  const { categoryCounts, maxCategoryCount } = useMemo(() => {
+    const counts = CATEGORIES.reduce((acc, cat) => {
+      acc[cat] = dashboard.tasks.filter((t) => t.category === cat).length;
+      return acc;
+    }, {} as Record<string, number>);
 
-  // Priority Stats based on calculated scores
-  const priorityCounts = {
-    "Critical (≥20)": dashboard.tasks.filter(t => (t.priority_score || 0) >= 20).length,
-    "Moderate (10-19)": dashboard.tasks.filter(t => (t.priority_score || 0) >= 10 && (t.priority_score || 0) < 20).length,
-    "Routine (<10)": dashboard.tasks.filter(t => (t.priority_score || 0) < 10).length,
-  };
-  const maxPriorityCount = Math.max(...Object.values(priorityCounts), 1);
+    const max = Math.max(...Object.values(counts), 1);
+    return { categoryCounts: counts, maxCategoryCount: max };
+  }, [dashboard.tasks]);
 
-  // Colors
-  const categoryColors: Record<string, string> = {
-    Assignment: "bg-blue-400",
-    Exam: "bg-red-400",
-    Project: "bg-purple-400",
-    Quiz: "bg-pink-400",
-    General: "bg-neutral-400",
-  };
-
-  const priorityColors: Record<string, string> = {
-    "Critical (≥20)": "bg-red-500",
-    "Moderate (10-19)": "bg-yellow-400",
-    "Routine (<10)": "bg-emerald-400",
-  };
+  const { priorityCounts, maxPriorityCount } = useMemo(() => {
+    const counts = {
+      "Critical (≥20)": dashboard.tasks.filter(
+        (t) => (t.priority_score || 0) >= 20,
+      ).length,
+      "Moderate (10-19)": dashboard.tasks.filter(
+        (t) => (t.priority_score || 0) >= 10 && (t.priority_score || 0) < 20,
+      ).length,
+      "Routine (<10)": dashboard.tasks.filter(
+        (t) => (t.priority_score || 0) < 10,
+      ).length,
+    };
+    const max = Math.max(...Object.values(counts), 1);
+    return { priorityCounts: counts, maxPriorityCount: max };
+  }, [dashboard.tasks]);
 
   return (
     <>
@@ -62,7 +72,10 @@ export default function AnalyticsPage() {
 
             {totalTasks === 0 ? (
               <div className="p-12 text-center border-4 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)]">
-                <PieChart className="mx-auto mb-6 text-neutral-400" size={64} />
+                <PieChart
+                  className="mx-auto mb-6 text-neutral-400"
+                  size={64}
+                />
                 <p className="font-bold text-2xl uppercase tracking-widest text-neutral-500">
                   Not enough data
                 </p>
@@ -72,19 +85,21 @@ export default function AnalyticsPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                
                 {/* Tasks by Category */}
                 <div className="border-4 border-black dark:border-white bg-white dark:bg-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)]">
                   <div className="flex items-center gap-3 mb-8">
                     <Layers size={28} />
-                    <h2 className="text-2xl font-extrabold uppercase tracking-widest">Tasks By Category</h2>
+                    <h2 className="text-2xl font-extrabold uppercase tracking-widest">
+                      Tasks By Category
+                    </h2>
                   </div>
-                  
+
                   <div className="space-y-6">
-                    {categories.map(cat => {
+                    {CATEGORIES.map((cat) => {
                       const count = categoryCounts[cat];
-                      const percentage = Math.round((count / maxCategoryCount) * 100) || 0;
-                      
+                      const percentage =
+                        Math.round((count / maxCategoryCount) * 100) || 0;
+
                       return (
                         <div key={cat} className="space-y-2">
                           <div className="flex justify-between text-sm font-bold uppercase tracking-widest">
@@ -92,8 +107,8 @@ export default function AnalyticsPage() {
                             <span>{count}</span>
                           </div>
                           <div className="h-8 border-2 border-black dark:border-white bg-neutral-100 dark:bg-neutral-900 w-full relative overflow-hidden">
-                            <div 
-                              className={`h-full absolute left-0 top-0 border-r-2 border-black dark:border-white transition-all duration-1000 ${categoryColors[cat]}`}
+                            <div
+                              className={`h-full absolute left-0 top-0 border-r-2 border-black dark:border-white transition-all duration-1000 ${CATEGORY_COLORS[cat]}`}
                               style={{ width: `${percentage}%` }}
                             />
                           </div>
@@ -107,12 +122,15 @@ export default function AnalyticsPage() {
                 <div className="border-4 border-black dark:border-white bg-white dark:bg-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)]">
                   <div className="flex items-center gap-3 mb-8">
                     <TrendingUp size={28} />
-                    <h2 className="text-2xl font-extrabold uppercase tracking-widest">Workload Priority</h2>
+                    <h2 className="text-2xl font-extrabold uppercase tracking-widest">
+                      Workload Priority
+                    </h2>
                   </div>
-                  
+
                   <div className="space-y-6">
                     {Object.entries(priorityCounts).map(([priority, count]) => {
-                      const percentage = Math.round((count / maxPriorityCount) * 100) || 0;
+                      const percentage =
+                        Math.round((count / maxPriorityCount) * 100) || 0;
 
                       return (
                         <div key={priority} className="space-y-2">
@@ -122,7 +140,7 @@ export default function AnalyticsPage() {
                           </div>
                           <div className="h-8 border-2 border-black dark:border-white bg-neutral-100 dark:bg-neutral-900 w-full relative overflow-hidden">
                             <div
-                              className={`h-full absolute left-0 top-0 border-r-2 border-black dark:border-white transition-all duration-1000 ${priorityColors[priority]}`}
+                              className={`h-full absolute left-0 top-0 border-r-2 border-black dark:border-white transition-all duration-1000 ${PRIORITY_COLORS[priority]}`}
                               style={{ width: `${percentage}%` }}
                             />
                           </div>
@@ -136,20 +154,42 @@ export default function AnalyticsPage() {
                 <div className="lg:col-span-2 border-4 border-black dark:border-white bg-white dark:bg-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] flex flex-col md:flex-row items-center gap-8">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-4">
-                      <AlertTriangle size={28} className={dashboard.clashes.length > 0 ? "text-red-500" : ""} />
-                      <h2 className="text-2xl font-extrabold uppercase tracking-widest">Collision Health</h2>
+                      <AlertTriangle
+                        size={28}
+                        className={
+                          dashboard.clashes.length > 0 ? "text-red-500" : ""
+                        }
+                      />
+                      <h2 className="text-2xl font-extrabold uppercase tracking-widest">
+                        Collision Health
+                      </h2>
                     </div>
                     <p className="font-medium text-neutral-600 dark:text-neutral-400">
-                      Based on your current schedule, you have a total of <strong className="text-black dark:text-white">{dashboard.clashes.length}</strong> active clashes out of {totalTasks} tasks. 
-                      {dashboard.clashes.length > 0 ? " You should consider rescheduling some items to balance your workload." : " Your schedule is clear!"}
+                      Based on your current schedule, you have a total of{" "}
+                      <strong className="text-black dark:text-white">
+                        {dashboard.clashes.length}
+                      </strong>{" "}
+                      active clashes out of {totalTasks} tasks.
+                      {dashboard.clashes.length > 0
+                        ? " You should consider rescheduling some items to balance your workload."
+                        : " Your schedule is clear!"}
                     </p>
                   </div>
-                  <div className={`p-8 border-4 border-black dark:border-white flex flex-col items-center justify-center min-w-[200px] ${dashboard.clashes.length > 0 ? 'bg-red-400 dark:bg-red-500 text-white dark:text-black' : 'bg-emerald-400 text-black'}`}>
-                    <span className="text-7xl font-extrabold tracking-tighter">{dashboard.clashes.length}</span>
-                    <span className="font-bold uppercase tracking-widest mt-2 text-sm">Total Clashes</span>
+                  <div
+                    className={`p-8 border-4 border-black dark:border-white flex flex-col items-center justify-center min-w-[200px] ${
+                      dashboard.clashes.length > 0
+                        ? "bg-red-400 dark:bg-red-500 text-white dark:text-black"
+                        : "bg-emerald-400 text-black"
+                    }`}
+                  >
+                    <span className="text-7xl font-extrabold tracking-tighter">
+                      {dashboard.clashes.length}
+                    </span>
+                    <span className="font-bold uppercase tracking-widest mt-2 text-sm">
+                      Total Clashes
+                    </span>
                   </div>
                 </div>
-
               </div>
             )}
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion } from "motion/react";
 import { Play, Pause, Square, Timer, Coffee, Moon, CheckCircle2, Clock } from "lucide-react";
 import { useCollisionData } from "../contexts/CollisionContext";
@@ -95,7 +95,10 @@ export default function PomodoroPage() {
   const totalSeconds = durations[mode] * 60;
   const progress = totalSeconds > 0 ? ((totalSeconds - timeLeft) / totalSeconds) * 100 : 0;
 
-  const pendingTasks = tasks.filter((t) => t.status !== "Completed");
+  const pendingTasks = useMemo(
+    () => tasks.filter((t) => t.status !== "Completed"),
+    [tasks],
+  );
   const selectedTaskWeeklyMinutes = selectedTaskId ? weeklyStats[Number(selectedTaskId)] || 0 : 0;
 
   return (

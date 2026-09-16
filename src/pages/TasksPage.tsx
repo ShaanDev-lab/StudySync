@@ -1,7 +1,13 @@
-import React, { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "motion/react";
-import { Search, Filter, Trash2, Edit2, AlertTriangle, Plus, CheckCircle2 } from "lucide-react";
-import { useCollisionData, type Task } from "../contexts/CollisionContext";
+import {
+  Search,
+  Filter,
+  Trash2,
+  Edit2,
+  AlertTriangle,
+} from "lucide-react";
+import { useCollisionData } from "../contexts/CollisionContext";
 import Navbar from "../components/common/Navbar";
 import { Show } from "@clerk/react";
 import LoginPage from "./LoginPage";
@@ -11,17 +17,36 @@ export default function TasksPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("All");
 
-  const filteredTasks = dashboard.tasks.filter((task) => {
-    const matchesSearch =
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const subjectName = dashboard.subjects.find(s => s.subject_id === task.subject_id)?.subject_name || "Unknown";
-    const matchesSubject =
-      subjectFilter === "All" || subjectName === subjectFilter;
-    return matchesSearch && matchesSubject;
-  });
+  const subjectMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const s of dashboard.subjects) {
+      map.set(s.subject_id, s.subject_name);
+    }
+    return map;
+  }, [dashboard.subjects]);
 
-  const subjects = ["All", ...dashboard.subjects.map((s) => s.subject_name)];
+  const subjects = useMemo(
+    () => ["All", ...dashboard.subjects.map((s) => s.subject_name)],
+    [dashboard.subjects],
+  );
+
+  const filteredTasks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return dashboard.tasks.filter((task) => {
+      const matchesSearch =
+        !query ||
+        task.title.toLowerCase().includes(query) ||
+        task.category.toLowerCase().includes(query);
+
+      const subjectName =
+        (task.subject_id !== undefined && subjectMap.get(task.subject_id)) ||
+        "Unknown";
+      const matchesSubject =
+        subjectFilter === "All" || subjectName === subjectFilter;
+
+      return matchesSearch && matchesSubject;
+    });
+  }, [dashboard.tasks, searchQuery, subjectFilter, subjectMap]);
 
   return (
     <>
@@ -44,7 +69,10 @@ export default function TasksPage() {
             {/* Filters Bar */}
             <div className="bg-white dark:bg-black p-6 border-4 border-black dark:border-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] dark:shadow-[8px_8px_0px_0px_rgba(255,255,255,1)] mb-12 flex flex-col md:flex-row gap-6">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-black dark:text-white" size={20} />
+                <Search
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-black dark:text-white"
+                  size={20}
+                />
                 <input
                   type="text"
                   placeholder="Search tasks..."
@@ -81,7 +109,10 @@ export default function TasksPage() {
                 <div className="divide-y-4 divide-black dark:divide-white">
                   {filteredTasks.map((task, idx) => {
                     const clashing = dashboard.isClashing(task.id);
-                    const subjectName = dashboard.subjects.find(s => s.subject_id === task.subject_id)?.subject_name || "Unknown";
+                    const subjectName =
+                      (task.subject_id !== undefined &&
+                        subjectMap.get(task.subject_id)) ||
+                      "Unknown";
 
                     return (
                       <motion.div
@@ -114,26 +145,31 @@ export default function TasksPage() {
                               Score: {task.priority_score || 0}
                             </span>
                             <span className="text-neutral-600 dark:text-neutral-400">
-                              {new Date(task.deadline).toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit"
-                              })}
+                              {new Date(task.deadline).toLocaleDateString(
+                                undefined,
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
                             </span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-3">
-                           <button
+                          <button
                             onClick={() => dashboard.startEdit(task)}
                             className="p-3 border-2 border-black dark:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors"
                           >
                             <Edit2 size={18} />
                           </button>
                           <button
-                            onClick={() => dashboard.handleDelete(task.id, task.title)}
+                            onClick={() =>
+                              dashboard.handleDelete(task.id, task.title)
+                            }
                             className="p-3 border-2 border-black dark:border-white hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors"
                           >
                             <Trash2 size={18} />
