@@ -1,0 +1,161 @@
+﻿flowchart TB
+    %% =========================================================================
+    %% STUDY SYNC: UNIFIED HIGH LEVEL DESIGN (HLD) & LOW LEVEL DESIGN (LLD)
+    %% =========================================================================
+
+    %% -------------------------------------------------------------------------
+    %% 1. PRESENTATION LAYER (FRONTEND - REACT 19 SPA)
+    %% -------------------------------------------------------------------------
+    subgraph FrontendTier ["🎨 1. PRESENTATION TIER (React 19 + Vite 6 + Tailwind CSS)"]
+        direction TB
+
+        User(["🎓 Student User"])
+
+        subgraph ClientAuth ["Auth & Session Management"]
+            ClerkReact["Clerk React Provider\n(<ClerkProvider>, useUser, useAuth)"]
+            TokenStorage["Session JWT & Email State\n(x-user-email Header Injection)"]
+        end
+
+        subgraph StateManagement ["Context & Cache Layer"]
+            CollisionContext["CollisionContext\n• tasks: Task[]\n• subjects: Subject[]\n• clashes: Clash[]\n• suggestions: Suggestion[]\n• memoized actions (useCallback)"]
+        end
+
+        subgraph PageRoutes ["Client-Side Routing (React Router DOM v7)"]
+            RouteDashboard["/ (DashboardPage)\n• SectionStat metrics\n• Clash Alert Banner\n• RecommendationCard\n• TaskCard grid"]
+            RouteTasks["/tasks (TasksPage)\n• Filter by Subject & Type\n• Search & Sort\n• Modals: Add, Edit, Delete"]
+            RouteCalendar["/calendar (CalendarPage)\n• Precomputed tasksByDay Map\n• Monthly interactive grid"]
+            RouteAnalytics["/analytics (AnalyticsPage)\n• Category Breakdown\n• Priority Distribution\n• Pomodoro Rolling 7-Day"]
+            RoutePomodoro["/pomodoro (PomodoroPage)\n• 25m Focus / 5m Break / 15m Long\n• Task Association & DB Session Log"]
+        end
+
+        subgraph ReusableComponents ["Modular UI Components"]
+            CompTaskCard["TaskCard.tsx"]
+            CompTaskModal["TaskFormModal.tsx"]
+            CompSubjectModal["SubjectModal.tsx"]
+            CompDeleteModal["DeleteConfirmationModal.tsx"]
+            CompSectionStat["SectionStat.tsx"]
+            CompNavbar["Navbar.tsx (Responsive Nav)"]
+            CompThemeToggle["ThemeToggle.tsx (Dark/Light)"]
+        end
+    end
+
+    %% -------------------------------------------------------------------------
+    %% 2. EXTERNAL SERVICES
+    %% -------------------------------------------------------------------------
+    subgraph ExternalServices ["☁️ 2. EXTERNAL SERVICES TIER"]
+        ClerkCloud["Clerk Identity Platform\n• User Authentication & OAuth\n• Session Token Issuance"]
+    end
+
+    %% -------------------------------------------------------------------------
+    %% 3. APPLICATION TIER (EXPRESS 4 MVC BACKEND)
+    %% -------------------------------------------------------------------------
+    subgraph BackendTier ["⚙️ 3. APPLICATION TIER (Express 4 + TypeScript + Node.js)"]
+        direction TB
+
+        ServerCore["server.ts\n• HTTP Server Listener (:3000)\n• Vite Dev HMR / Prod Static Dist"]
+
+        subgraph MiddlewarePipeline ["HTTP Middleware Chain"]
+            MW_CORS["CORS Middleware"]
+            MW_JSON["express.json() Body Parser"]
+            MW_Auth["Custom Auth Middleware\n• Validates x-user-email\n• Queries users table\n• Injects res.locals.userId"]
+        end
+
+        subgraph RouterLayer ["Express API Routers"]
+            RouterTasks["/api/tasks (taskRoutes.ts)"]
+            RouterSubjects["/api/subjects (subjectRoutes.ts)"]
+            RouterSuggestions["/api/suggestions (suggestionRoutes.ts)"]
+            RouterPomodoro["/api/pomodoro (pomodoroRoutes.ts)"]
+            RouterUsers["/api/users (userRoutes.ts)"]
+        end
+
+        subgraph ControllerLayer ["Controllers (Request Orchestration)"]
+            CtrlTask["taskController.ts\n• getAllTasks\n• createTask\n• updateTask\n• deleteTask\n• getClashes"]
+            CtrlSubject["subjectController.ts\n• getSubjects\n• createSubject\n• deleteSubject"]
+            CtrlSuggestion["suggestionController.ts\n• getPendingSuggestions\n• acceptSuggestion\n• rejectSuggestion"]
+            CtrlPomodoro["pomodoroController.ts\n• logSession\n• getWeeklyStats"]
+            CtrlUser["userController.ts\n• syncUser (Upsert)"]
+        end
+
+        subgraph AlgorithmicEngines ["Algorithmic & Heuristic Engine"]
+            EngineClash["Self-Join Collision Engine\n• Window: ABS(diff(deadline1, deadline2)) < 86400s\n• Cross-subject detection"]
+            EnginePriority["Academic Prioritization Evaluator\n• Category weights: Exam=4, Quiz=3, Project=2, Other=1\n• Priority = CategoryWeight * Effort"]
+            EngineReschedule["Greedy Forward Slot Search\n• Loops proposedDate = deadline + 1 day\n• Validates no conflict (|diff| < 24h) with all user tasks\n• Emits pending suggestion"]
+        end
+
+        subgraph ModelLayer ["Data Access Layer (Models - raw SQL)"]
+            ModelTask["TaskModel.ts"]
+            ModelSubject["SubjectModel.ts"]
+            ModelSuggestion["SuggestionModel.ts"]
+            ModelPomodoro["PomodoroModel.ts"]
+            ModelUser["UserModel.ts"]
+        end
+    end
+
+    %% -------------------------------------------------------------------------
+    %% 4. PERSISTENCE TIER (MYSQL 8.0)
+    %% -------------------------------------------------------------------------
+    subgraph DatabaseTier ["🗄️ 4. PERSISTENCE TIER (MySQL 8.0 - deadline_db)"]
+        direction TB
+
+        DBPool["mysql2 Connection Pool (config/db.ts)"]
+
+        subgraph DatabaseSchema ["Relational Schema & Constraints"]
+            T_Users[("users\n• user_id (PK)\n• email (UK)\n• name, password")]
+            T_Subjects[("subjects\n• subject_id (PK)\n• user_id (FK -> users)\n• subject_name")]
+            T_Tasks[("tasks\n• id (PK)\n• subject_id (FK -> subjects)\n• title, description, deadline\n• category, estimated_effort (1-10)\n• category_weight (STORED GENERATED)\n• priority_score (STORED GENERATED)\n• status (Pending, Completed)")]
+            T_Alerts[("collision_alerts\n• alert_id (PK)\n• task1_id, task2_id (FK -> tasks)\n• message, created_at")]
+            T_Suggestions[("reschedule_suggestions\n• id (PK)\n• task_id (FK -> tasks)\n• suggested_date\n• status (Pending, Accepted, Rejected)")]
+            T_Pomodoro[("pomodoro_sessions\n• session_id (PK)\n• task_id (FK -> tasks)\n• user_id (FK -> users)\n• duration_minutes, created_at")]
+        end
+    end
+
+    %% =========================================================================
+    %% DATA FLOW AND COMPONENT WIRING
+    %% =========================================================================
+
+    User -->|"Interacts with Views"| PageRoutes
+    PageRoutes --> ReusableComponents
+    PageRoutes --> CollisionContext
+    
+    User -->|"Signs in / Signs up"| ClerkReact
+    ClerkReact <-->|"OAuth2 / OIDC Token Exchange"| ClerkCloud
+    ClerkReact --> TokenStorage
+
+    CollisionContext -->|"Async Axios / Fetch with x-user-email"| ServerCore
+    ServerCore --> MW_CORS --> MW_JSON --> MW_Auth
+
+    MW_Auth -->|"Verifies email & extracts user_id"| T_Users
+    MW_Auth --> RouterLayer
+
+    RouterTasks --> CtrlTask
+    RouterSubjects --> CtrlSubject
+    RouterSuggestions --> CtrlSuggestion
+    RouterPomodoro --> CtrlPomodoro
+    RouterUsers --> CtrlUser
+
+    CtrlTask --> ModelTask
+    CtrlSubject --> ModelSubject
+    CtrlSuggestion --> ModelSuggestion
+    CtrlPomodoro --> ModelPomodoro
+    CtrlUser --> ModelUser
+
+    ModelTask --> EngineClash
+    EngineClash --> EnginePriority
+    EnginePriority --> EngineReschedule
+    EngineReschedule --> ModelSuggestion
+
+    ModelTask --> DBPool
+    ModelSubject --> DBPool
+    ModelSuggestion --> DBPool
+    ModelPomodoro --> DBPool
+    ModelUser --> DBPool
+
+    DBPool --> DatabaseSchema
+
+    %% Database Foreign Key Cascade Hierarchy
+    T_Users -->|"1 : N (CASCADE)"| T_Subjects
+    T_Subjects -->|"1 : N (CASCADE)"| T_Tasks
+    T_Tasks -->|"1 : N (CASCADE)"| T_Alerts
+    T_Tasks -->|"1 : N (CASCADE)"| T_Suggestions
+    T_Tasks -->|"1 : N (CASCADE)"| T_Pomodoro
+    T_Users -->|"1 : N (CASCADE)"| T_Pomodoro

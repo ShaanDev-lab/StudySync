@@ -1,0 +1,56 @@
+﻿sequenceDiagram
+    %% ==========================================
+    %% STUDY SYNC - COLLISION DETECTION & GREEDY RESCHEDULING SEQUENCE
+    %% ==========================================
+    autonumber
+
+    actor Student as 🎓 Student
+    participant UI as 💻 Frontend (CollisionContext)
+    participant Auth as 🛡️ AuthMiddleware
+    participant Ctrl as 🎛️ TaskController
+    participant Model as ⚙️ TaskModel
+    participant DB as 🗄️ MySQL (deadline_db)
+    participant Sugg as 💡 SuggestionModel
+
+    Student->>UI: Opens Dashboard or creates/updates Task
+    UI->>Auth: GET /api/tasks/detect-clashes (Header: x-user-email)
+    Auth->>DB: SELECT user_id FROM users WHERE email = ?
+    DB-->>Auth: Returns user_id
+    Auth->>Ctrl: getClashes(req, res) with res.locals.userId
+    Ctrl->>Model: detectClashes(userId)
+
+    Note over Model,DB: Step 1: Self-Join Query for Deadline Clashes (<= 24h)
+    Model->>DB: SELECT a.id, b.id FROM tasks a JOIN tasks b ON a.id < b.id WHERE ABS(TIMESTAMPDIFF(SECOND, a.deadline, b.deadline)) < 86400
+    DB-->>Model: Returns clashing task pairs
+
+    Model->>DB: SELECT * FROM tasks WHERE user_id = ? ORDER BY deadline ASC
+    DB-->>Model: Returns all active user tasks
+
+    Note over Model: Step 2: Algorithmic Resolution for each Clash Pair
+    loop For each (Task1, Task2) in Clashes
+        Model->>Model: Compare priority_score: P1 vs P2
+        alt P1 < P2
+            Model->>Model: Select Task1 for rescheduling
+        else P1 >= P2
+            Model->>Model: Select Task2 for rescheduling
+        end
+
+        Model->>Sugg: getSuggestionByTaskId(taskId)
+        Sugg->>DB: SELECT * FROM reschedule_suggestions WHERE task_id = ?
+        DB-->>Sugg: Return existing suggestion (or null)
+
+        opt No pending suggestion exists
+            Note over Model: Step 3: Greedy Forward Slot Search
+            loop While proposedDate has 24h conflict
+                Model->>Model: proposedDate = proposedDate + 1 day
+                Model->>Model: Check if ABS(task.deadline - proposedDate) < 24h for any task
+            end
+            Model->>Sugg: createSuggestion(taskId, clashFreeDate)
+            Sugg->>DB: INSERT INTO reschedule_suggestions (task_id, suggested_date, status) VALUES (?, ?, 'Pending')
+            DB-->>Sugg: insertId
+        end
+    end
+
+    Model-->>Ctrl: Returns clash list
+    Ctrl-->>UI: 200 OK [clashes, updated suggestions]
+    UI-->>Student: Displays Clash Alert Banner & One-Click Reschedule Cards

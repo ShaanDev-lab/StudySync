@@ -1,0 +1,111 @@
+﻿flowchart TD
+    %% ==========================================
+    %% STUDY SYNC - HIGH LEVEL DESIGN (HLD)
+    %% ==========================================
+
+    subgraph ClientTier ["1. Client Tier (Frontend - React 19 SPA)"]
+        User["🎓 Student / User"]
+        
+        subgraph UIComponents ["UI & Component Layer"]
+            Router["React Router DOM v7 (Route Splitting)"]
+            Dashboard["Dashboard View (Metrics & Clash Alerts)"]
+            TasksView["Tasks Management & Filtering"]
+            CalendarView["Calendar View (Deadlines)"]
+            AnalyticsView["Analytics View (Workload Charts)"]
+            PomodoroView["Pomodoro Timer View"]
+        end
+
+        subgraph ClientCore ["Client Core Services & State"]
+            ClerkClient["Clerk React SDK (Auth Client)"]
+            CollisionCtx["CollisionContext (Central Data Store)"]
+            ThemeStore["Theme Provider (Dark / Light Mode)"]
+        end
+    end
+
+    subgraph AuthTier ["2. External Identity Provider"]
+        ClerkService["☁️ Clerk Cloud Auth Service (Identity & Sessions)"]
+    end
+
+    subgraph ServerTier ["3. Application Tier (Express 4 MVC Backend)"]
+        ServerEntry["server.ts (HTTP Server Entry)"]
+        
+        subgraph MiddlewarePipeline ["Middleware Pipeline"]
+            CorsMW["CORS Middleware"]
+            JsonMW["express.json Body Parser"]
+            AuthMW["Custom Auth Middleware (x-user-email Resolver)"]
+        end
+
+        subgraph Controllers ["Controllers Layer"]
+            TaskCtrl["taskController"]
+            SubjectCtrl["subjectController"]
+            SuggestionCtrl["suggestionController"]
+            PomodoroCtrl["pomodoroController"]
+            UserCtrl["userController"]
+        end
+
+        subgraph AlgorithmicCore ["Domain & Heuristic Services"]
+            ClashDetector["Collision Detector Engine (SQL Self-Join)"]
+            GreedyRescheduler["Greedy Heuristic Rescheduler (Slot Search)"]
+            PriorityEngine["Urgency & Effort Prioritization"]
+        end
+
+        subgraph ModelsLayer ["Data Access Layer (Models)"]
+            TaskModel["TaskModel"]
+            SubjectModel["SubjectModel"]
+            SuggestionModel["SuggestionModel"]
+            PomodoroModel["PomodoroModel"]
+            UserModel["UserModel"]
+        end
+    end
+
+    subgraph DatabaseTier ["4. Persistence Tier (MySQL 8.0 - deadline_db)"]
+        Pool["mysql2 Connection Pool (config/db.ts)"]
+        
+        subgraph Tables ["Relational Database Tables"]
+            UsersTable[("users")]
+            SubjectsTable[("subjects")]
+            TasksTable[("tasks\n• Stored Generated category_weight\n• Stored Generated priority_score")]
+            AlertsTable[("collision_alerts")]
+            SuggestionsTable[("reschedule_suggestions")]
+            PomodoroTable[("pomodoro_sessions")]
+        end
+    end
+
+    %% Interactions and Connections
+    User -->|"Interacts with UI"| UIComponents
+    UIComponents --> Router
+    Router --> CollisionCtx
+    UIComponents --> ClerkClient
+
+    ClerkClient <-->|"OAuth / JWT Token Verification"| ClerkService
+
+    CollisionCtx -->|"REST API Requests + x-user-email Header"| ServerEntry
+    ServerEntry --> CorsMW --> JsonMW --> AuthMW
+
+    AuthMW -->|"Resolves user_id by email"| UsersTable
+    AuthMW -->|"Populates res.locals.userId"| Controllers
+
+    TaskCtrl --> TaskModel
+    SubjectCtrl --> SubjectModel
+    SuggestionCtrl --> SuggestionModel
+    PomodoroCtrl --> PomodoroModel
+    UserCtrl --> UserModel
+
+    TaskModel --> ClashDetector
+    ClashDetector --> GreedyRescheduler
+    TaskModel --> PriorityEngine
+
+    TaskModel --> Pool
+    SubjectModel --> Pool
+    SuggestionModel --> Pool
+    PomodoroModel --> Pool
+    UserModel --> Pool
+
+    Pool --> Tables
+
+    %% Relationships within database
+    UsersTable -->|"1:N (Cascade)"| SubjectsTable
+    SubjectsTable -->|"1:N (Cascade)"| TasksTable
+    TasksTable -->|"1:N (Cascade)"| AlertsTable
+    TasksTable -->|"1:N (Cascade)"| SuggestionsTable
+    TasksTable -->|"1:N (Cascade)"| PomodoroTable

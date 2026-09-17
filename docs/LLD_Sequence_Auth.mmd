@@ -1,0 +1,40 @@
+﻿sequenceDiagram
+    %% ==========================================
+    %% STUDY SYNC - AUTHENTICATION & USER SYNC LIFECYCLE
+    %% ==========================================
+    autonumber
+
+    actor Student as 🎓 Student
+    participant ReactApp as ⚛️ React SPA (ClerkProvider)
+    participant Clerk as ☁️ Clerk Auth Service
+    participant Express as 🌐 Express Server (server.ts)
+    participant AuthMW as 🛡️ Custom Auth Middleware
+    participant UserCtrl as 👤 UserController / UserModel
+    participant DB as 🗄️ MySQL (deadline_db)
+
+    Student->>ReactApp: Visits Application & signs in
+    ReactApp->>Clerk: Submit credentials / OAuth
+    Clerk-->>ReactApp: JWT Session Token + User Profile (name, email)
+
+    Note over ReactApp,Express: Step 1: User Sync with Backend
+    ReactApp->>Express: POST /api/users/sync { name, email }
+    Express->>UserCtrl: syncUser(req, res)
+    UserCtrl->>DB: INSERT INTO users (name, email) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = ?
+    DB-->>UserCtrl: user_id
+    UserCtrl-->>ReactApp: 200 OK { user_id, email, name }
+
+    Note over ReactApp,DB: Step 2: Protected Request Pipeline
+    Student->>ReactApp: Navigates to Dashboard / Tasks / Pomodoro
+    ReactApp->>Express: GET /api/tasks (Header: x-user-email = student@college.edu)
+    Express->>AuthMW: Intercepts request
+    AuthMW->>DB: SELECT user_id FROM users WHERE email = 'student@college.edu'
+    
+    alt User found
+        DB-->>AuthMW: { user_id: 101 }
+        AuthMW->>AuthMW: Set res.locals.userId = 101
+        AuthMW->>Express: next() -> Route Controller
+        Express-->>ReactApp: 200 OK [Task List Data]
+    else Missing or invalid user
+        DB-->>AuthMW: Empty Result
+        AuthMW-->>ReactApp: 401 Unauthorized { message: "Unauthorized" }
+    end

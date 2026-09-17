@@ -1,0 +1,115 @@
+﻿classDiagram
+    %% ==========================================
+    %% STUDY SYNC - LOW LEVEL CLASS & MODULE DESIGN
+    %% ==========================================
+
+    class DBConnection {
+        -Pool pool
+        +getDB() Promise~Pool~
+    }
+
+    class TaskModel {
+        +getAll(userId: number) Promise~Task[]~
+        +getById(id: number) Promise~Task~
+        +create(taskData: Omit~Task, id~) Promise~number~
+        +update(id: number, taskData: Partial~Task~) Promise~boolean~
+        +delete(id: number) Promise~boolean~
+        +detectClashes(userId: number) Promise~Clash[]~
+    }
+
+    class SubjectModel {
+        +getAll(userId: number) Promise~Subject[]~
+        +create(name: string, userId: number) Promise~number~
+        +delete(id: number, userId: number) Promise~boolean~
+    }
+
+    class UserModel {
+        +findOrCreate(name: string, email: string) Promise~User~
+        +getByEmail(email: string) Promise~User~
+    }
+
+    class SuggestionModel {
+        +getPending(userId: number) Promise~Suggestion[]~
+        +getSuggestionByTaskId(taskId: number) Promise~Suggestion~
+        +createSuggestion(taskId: number, date: string) Promise~number~
+        +acceptSuggestion(id: number) Promise~boolean~
+        +rejectSuggestion(id: number) Promise~boolean~
+    }
+
+    class PomodoroModel {
+        +logSession(taskId: number, userId: number, duration: number) Promise~number~
+        +getWeeklyStats(userId: number) Promise~WeeklyStat[]~
+    }
+
+    class TaskController {
+        +getAllTasks(req: Request, res: Response) Promise~void~
+        +createTask(req: Request, res: Response) Promise~void~
+        +updateTask(req: Request, res: Response) Promise~void~
+        +deleteTask(req: Request, res: Response) Promise~void~
+        +getClashes(req: Request, res: Response) Promise~void~
+    }
+
+    class SubjectController {
+        +getSubjects(req: Request, res: Response) Promise~void~
+        +createSubject(req: Request, res: Response) Promise~void~
+        +deleteSubject(req: Request, res: Response) Promise~void~
+    }
+
+    class SuggestionController {
+        +getPendingSuggestions(req: Request, res: Response) Promise~void~
+        +acceptSuggestion(req: Request, res: Response) Promise~void~
+        +rejectSuggestion(req: Request, res: Response) Promise~void~
+    }
+
+    class PomodoroController {
+        +logSession(req: Request, res: Response) Promise~void~
+        +getWeeklyStats(req: Request, res: Response) Promise~void~
+    }
+
+    class UserController {
+        +syncUser(req: Request, res: Response) Promise~void~
+    }
+
+    class AuthMiddleware {
+        +authenticate(req: Request, res: Response, next: NextFunction) Promise~void~
+    }
+
+    class CollisionContext {
+        +Task[] tasks
+        +Subject[] subjects
+        +Clash[] clashes
+        +Suggestion[] suggestions
+        +boolean loading
+        +string error
+        +fetchTasks() Promise~void~
+        +fetchSubjects() Promise~void~
+        +fetchClashes() Promise~void~
+        +createTask(task: TaskInput) Promise~void~
+        +updateTask(id: number, task: Partial~Task~) Promise~void~
+        +deleteTask(id: number) Promise~void~
+        +acceptSuggestion(id: number) Promise~void~
+        +rejectSuggestion(id: number) Promise~void~
+        +logPomodoro(taskId: number, duration: number) Promise~void~
+    }
+
+    %% Relationships
+    TaskController --> TaskModel : delegates to
+    SubjectController --> SubjectModel : delegates to
+    SuggestionController --> SuggestionModel : delegates to
+    PomodoroController --> PomodoroModel : delegates to
+    UserController --> UserModel : delegates to
+
+    TaskModel ..> DBConnection : uses
+    SubjectModel ..> DBConnection : uses
+    SuggestionModel ..> DBConnection : uses
+    PomodoroModel ..> DBConnection : uses
+    UserModel ..> DBConnection : uses
+
+    TaskModel ..> SuggestionModel : invokes on clash detection
+    AuthMiddleware ..> DBConnection : verifies email
+
+    CollisionContext ..> TaskController : HTTP REST
+    CollisionContext ..> SubjectController : HTTP REST
+    CollisionContext ..> SuggestionController : HTTP REST
+    CollisionContext ..> PomodoroController : HTTP REST
+    CollisionContext ..> UserController : HTTP REST

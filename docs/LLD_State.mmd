@@ -1,0 +1,37 @@
+﻿stateDiagram-v2
+    %% ==========================================
+    %% STUDY SYNC - SYSTEM STATE MACHINES
+    %% ==========================================
+
+    state "Pomodoro Focus Timer States" as PomodoroLifecycle {
+        [*] --> Idle
+        Idle --> Running : Click Start Timer (25m)
+        Running --> Paused : Click Pause
+        Paused --> Running : Click Resume
+        Running --> SessionComplete : Timer ticks to 00:00
+        SessionComplete --> Logging : Auto trigger POST /api/pomodoro/log
+        Logging --> ShortBreak : Break starts (5m)
+        Logging --> LongBreak : After 4 focus cycles (15m)
+        ShortBreak --> Idle : Break ends
+        LongBreak --> Idle : Break ends
+        Paused --> Idle : Click Reset
+    }
+
+    state "Reschedule Suggestion States" as SuggestionLifecycle {
+        [*] --> ConflictIdentified : SQL Self-Join detects <= 24h gap
+        ConflictIdentified --> Pending : Heuristic proposes clash-free date
+        Pending --> Accepted : User clicks "Accept" (Updates Task Deadline)
+        Pending --> Rejected : User clicks "Reject" (Dismisses suggestion)
+        Accepted --> [*]
+        Rejected --> [*]
+    }
+
+    state "Task Lifecycle States" as TaskLifecycle {
+        [*] --> TaskCreated : POST /api/tasks
+        TaskCreated --> ConflictFree : No task within 24 hours
+        TaskCreated --> Clashing : Task within 24h of another task
+        Clashing --> ConflictFree : Suggestion Accepted or Task Updated
+        ConflictFree --> TaskCompleted : PUT /api/tasks/:id (status: Completed)
+        Clashing --> TaskCompleted : Completed despite clash
+        TaskCompleted --> [*]
+    }

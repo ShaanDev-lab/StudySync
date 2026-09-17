@@ -1,0 +1,63 @@
+﻿erDiagram
+    %% ==========================================
+    %% STUDY SYNC - DATABASE ENTITY RELATIONSHIP DIAGRAM (ERD)
+    %% ==========================================
+
+    USERS ||--o{ SUBJECTS : "owns"
+    USERS ||--o{ POMODORO_SESSIONS : "performs"
+    SUBJECTS ||--o{ TASKS : "contains"
+    TASKS ||--o{ COLLISION_ALERTS : "involved_as_task1"
+    TASKS ||--o{ COLLISION_ALERTS : "involved_as_task2"
+    TASKS ||--o{ RESCHEDULE_SUGGESTIONS : "generates"
+    TASKS ||--o{ POMODORO_SESSIONS : "logs_effort_against"
+
+    USERS {
+        int user_id PK "Auto Increment"
+        string name "Student Full Name"
+        string email UK "Unique Student Email"
+        string password "Hashed Credentials / Clerk Ref"
+    }
+
+    SUBJECTS {
+        int subject_id PK "Auto Increment"
+        int user_id FK "References users.user_id (ON DELETE CASCADE)"
+        string subject_name "Course / Subject Title"
+    }
+
+    TASKS {
+        int id PK "Auto Increment Task Identifier"
+        int subject_id FK "References subjects.subject_id (ON DELETE CASCADE)"
+        string title "Task Title / Name"
+        string description "Detailed description or notes"
+        string task_type "ENUM: Assignment, Exam, Lab, Viva"
+        datetime deadline "Target Due Date & Time"
+        string category "Exam, Quiz, Project, Assignment"
+        int estimated_effort "Cognitive Effort Scale (1 to 10)"
+        int category_weight "STORED GENERATED: Exam=4, Quiz=3, Project=2, Other=1"
+        int priority_score "STORED GENERATED: category_weight * estimated_effort"
+        string status "ENUM: Pending, Completed"
+    }
+
+    COLLISION_ALERTS {
+        int alert_id PK "Auto Increment"
+        int task1_id FK "References tasks.id (ON DELETE CASCADE)"
+        int task2_id FK "References tasks.id (ON DELETE CASCADE)"
+        string message "Warning alert details"
+        timestamp created_at "Detection Timestamp"
+    }
+
+    RESCHEDULE_SUGGESTIONS {
+        int id PK "Auto Increment"
+        int task_id FK "References tasks.id (ON DELETE CASCADE)"
+        datetime suggested_date "First Clash-Free Future Date"
+        string status "Pending, Accepted, Rejected"
+        timestamp created_at "Generation Timestamp"
+    }
+
+    POMODORO_SESSIONS {
+        int session_id PK "Auto Increment"
+        int task_id FK "References tasks.id (ON DELETE CASCADE)"
+        int user_id FK "References users.user_id (ON DELETE CASCADE)"
+        int duration_minutes "Completed focus block (e.g. 25 min)"
+        timestamp created_at "Logged Timestamp"
+    }
