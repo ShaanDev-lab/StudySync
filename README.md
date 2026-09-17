@@ -21,6 +21,7 @@
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [API Reference](#api-reference)
+- [Use Cases](#use-cases)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
@@ -1052,6 +1053,27 @@ All routes are prefixed with `/api`. Every route (except `/api/users/sync` and `
 |---|---|---|
 | `POST` | `/api/pomodoro/log` | Log a completed Pomodoro session for a task |
 | `GET` | `/api/pomodoro/weekly-stats` | Retrieve weekly study-time statistics |
+
+---
+
+## Use Cases
+
+Actor: **Student** (authenticated via Clerk; `x-user-email` on all protected routes).
+
+| ID | Use Case | Description | Primary Flow |
+|---|---|---|---|
+| UC-01 | Sign up / Sign in | Create account or log in, sync to DB | Clerk auth → `POST /api/users/sync` → `INSERT INTO users ... ON DUPLICATE KEY UPDATE` |
+| UC-02 | Manage subjects | Group tasks by course | `SubjectModal` → `POST /api/subjects` / `DELETE /api/subjects/:id` |
+| UC-03 | Create task | Add assignment/exam/lab/viva with deadline, category, effort 1–10 | `TaskFormModal` (`openCreateTask` → `handleSubmit`) → `POST /api/tasks` → `INSERT INTO tasks` (auto `priority_score = category_weight × effort`) |
+| UC-04 | View / search / filter tasks | Browse deadlines, find work fast | `TasksPage` search (title/category) + subject dropdown → `GET /api/tasks`; clash badge via `isClashing()` + `GET /api/tasks/detect-clashes` |
+| UC-05 | Edit task | Change title, deadline, category, effort, subject | Edit button (`startEdit`) → `PUT /api/tasks/:id` → `UPDATE tasks` (re-triggers clash check) |
+| UC-06 | Complete task | Mark work done | Mark-complete → `PUT /api/tasks/:id { status: Completed }` |
+| UC-07 | Delete task | Remove unwanted task | Delete button → `DeleteConfirmationModal` (`handleDelete` → `confirmDelete`) → `DELETE /api/tasks/:id` |
+| UC-08 | Detect deadline collisions | Spot tasks due within 24h of each other | `GET /api/tasks/detect-clashes` (SQL self-join `ABS(TIMESTAMPDIFF(SECOND, d1, d2)) < 86400`) → clash banner on Dashboard |
+| UC-09 | Accept / reject reschedule suggestion | Resolve a clash in one click | `RecommendationCard` → `POST /api/suggestions/:id/accept` (`UPDATE tasks.deadline`) or `/reject` |
+| UC-10 | View calendar | See deadlines on monthly grid | `CalendarPage` (precomputed `tasksByDay` map) → `GET /api/tasks` |
+| UC-11 | Focus with Pomodoro timer | Log 25m focus / 5m break / 15m long break against a task | `PomodoroPage` → `POST /api/pomodoro/log` → `INSERT INTO pomodoro_sessions` |
+| UC-12 | Review analytics | Audit effort by category, priority, 7-day focus | `AnalyticsPage` → `GET /api/pomodoro/weekly-stats` + `GET /api/tasks` |
 
 ---
 
