@@ -1,4 +1,4 @@
-﻿# 📚 StudySync
+# 📚 StudySync
 
 > An intelligent student productivity app — manage assignments, detect deadline collisions, get automated reschedule suggestions, and track study sessions with a built-in Pomodoro timer.
 
@@ -19,6 +19,7 @@
   - [Environment Variables](#environment-variables)
   - [Running the App](#running-the-app)
   - [Production Build](#production-build)
+- [Architecture & System Design (HLD & LLD)](HLD_LLD.md)
 - [Authentication](#authentication)
 - [Contributing](#contributing)
 
