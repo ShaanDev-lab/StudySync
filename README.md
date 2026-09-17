@@ -617,5 +617,3 @@ StudySync uses **Clerk** for identity management:
 Please follow the existing TypeScript & ESLint conventions and keep the MVC layer separation intact (models handle SQL, controllers handle HTTP concerns).
 
 ---
-
-<p align="center">Built with ❤️ for students who always leave things to the last minute.</p>
