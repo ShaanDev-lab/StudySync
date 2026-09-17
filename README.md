@@ -176,7 +176,7 @@ This literature survey establishes that while digital task management is a matur
 
 ---
 
-### 8. Academic References (IEEE Style)
+### 8. Academic References
 
 1. J. Sweller, "Cognitive load during problem solving: Effects on learning," *Cognitive Science*, vol. 12, no. 2, pp. 257–285, 1988.
 2. P. Steel, "The nature of procrastination: A meta-analytic and theoretical review of quintessential self-regulatory failure," *Psychological Bulletin*, vol. 133, no. 1, pp. 65–94, 2007.
