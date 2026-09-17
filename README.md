@@ -22,6 +22,7 @@
 - [Project Structure](#project-structure)
 - [API Reference](#api-reference)
 - [Use Cases](#use-cases)
+- [System Requirements](#system-requirements)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
@@ -1074,6 +1075,37 @@ Actor: **Student** (authenticated via Clerk; `x-user-email` on all protected rou
 | UC-10 | View calendar | See deadlines on monthly grid | `CalendarPage` (precomputed `tasksByDay` map) → `GET /api/tasks` |
 | UC-11 | Focus with Pomodoro timer | Log 25m focus / 5m break / 15m long break against a task | `PomodoroPage` → `POST /api/pomodoro/log` → `INSERT INTO pomodoro_sessions` |
 | UC-12 | Review analytics | Audit effort by category, priority, 7-day focus | `AnalyticsPage` → `GET /api/pomodoro/weekly-stats` + `GET /api/tasks` |
+
+---
+
+## System Requirements
+
+### Software
+
+| Requirement | Version / Detail | Why |
+|---|---|---|
+| Node.js | >= 18 | Runs Express 4 API + Vite 6 dev server via `tsx server.ts` |
+| npm | >= 9 (bundled with Node) | Installs `package.json` deps (`react@19`, `express@4`, `mysql2`, `@clerk/react`) |
+| MySQL | >= 8.0 | Uses `STORED GENERATED` columns (`category_weight`, `priority_score`) and `TIMESTAMPDIFF()`; init with `schema.sql` (`deadline_db`) |
+| OS | Windows 10/11, macOS 12+, or Linux | Node + MySQL supported platforms |
+| Browser | Chrome / Edge / Firefox (latest 2 versions) | React 19 SPA, Clerk sign-in, Tailwind v4 styling |
+| Clerk account | Free app + `VITE_CLERK_PUBLISHABLE_KEY` | Authentication (`<ClerkProvider>`, `POST /api/users/sync`) |
+
+### Hardware (minimum for local dev)
+
+| Resource | Minimum |
+|---|---|
+| RAM | 4 GB (8 GB recommended with MySQL + Vite HMR) |
+| Disk | 1 GB free (node_modules + MySQL data + `dist/`) |
+| CPU | Any dual-core 64-bit |
+
+### Network / Ports
+
+| Requirement | Detail |
+|---|---|
+| Port `3000` free | Single Express + Vite server (`http://localhost:3000`); override via `PORT` in `.env` |
+| MySQL reachable | Default `DB_HOST=localhost`, `DB_USER=root`, `DB_NAME=deadline_db` (see `.env.example`) |
+| Internet access | Required for Clerk auth and npm install |
 
 ---
 
