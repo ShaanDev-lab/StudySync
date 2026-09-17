@@ -10,6 +10,7 @@
 - [Overview](#overview)
 - [Features](#features)
 - [System & User Workflows](#system--user-workflows)
+  - [User Task Management Flow (CRUD Lifecycle)](#user-task-management-flow-crud-lifecycle)
 - [High-Level Design (HLD)](#high-level-design-hld)
 - [Low-Level Design (LLD)](#low-level-design-lld)
   - [1. Database Schema & Entity-Relationship Diagram (ERD)](#1-database-schema--entity-relationship-diagram-erd)
@@ -360,6 +361,48 @@ stateDiagram-v2
 
     BreakTimer --> Standby : Break finished, ready for next session
 ```
+
+---
+
+### User Task Management Flow (CRUD Lifecycle)
+
+This flow covers the day-to-day task loop from the student's perspective: create a subject once, then create, view, filter, edit, complete, and delete tasks. It is implemented by `TasksPage.tsx` + `DashboardPage.tsx` (views), `CollisionContext.tsx` (`openCreateTask`, `startEdit`, `handleSubmit`, `handleDelete`/`confirmDelete`, `isClashing`), `TaskFormModal` / `SubjectModal` / `DeleteConfirmationModal` / `TaskCard` (components), `taskController.ts` + `taskModel.ts` (backend), and the `tasks` table (MySQL generated `priority_score`).
+
+```mermaid
+flowchart TD
+    A["Open Tasks or Dashboard page"] --> B{"Subjects exist?"}
+    B -- "No" --> C["SubjectModal: enter name<br/>handleAddSubject<br/>POST /api/subjects"]
+    C --> D["TaskFormModal: openCreateTask"]
+    B -- "Yes" --> D
+    D --> E["Fill title, description, category,<br/>effort 1-10, deadline, subject<br/>handleSubmit"]
+    E --> F["POST /api/tasks<br/>INSERT INTO tasks<br/>auto priority_score = weight x effort"]
+    F --> G["CollisionContext refresh:<br/>fetchTasks + detect-clashes"]
+    G --> H["TasksPage list:<br/>search by title/category<br/>filter by subject<br/>clash badge via isClashing"]
+    H --> I{"User action?"}
+    I -- "Edit" --> J["startEdit + TaskFormModal<br/>PUT /api/tasks/:id<br/>UPDATE tasks"]
+    I -- "Complete" --> K["PUT /api/tasks/:id status=Completed<br/>UPDATE tasks SET status"]
+    I -- "Delete" --> L["DeleteConfirmationModal<br/>handleDelete + confirmDelete<br/>DELETE /api/tasks/:id"]
+    J --> G
+    K --> M["Task hidden from active lists<br/>shown in Analytics history"]
+    L --> G
+```
+
+| Action | UI Trigger | Context Method | API Endpoint | Database Effect |
+|---|---|---|---|---|
+| Create subject | `SubjectModal` | `handleAddSubject` | `POST /api/subjects` | `INSERT INTO subjects` |
+| Create task | `TaskFormModal` | `openCreateTask` → `handleSubmit` | `POST /api/tasks` | `INSERT INTO tasks` (auto-computes `category_weight`, `priority_score`) |
+| View / search / filter | `TasksPage` search bar + subject dropdown | `tasks`, `isClashing(task.id)` | `GET /api/tasks` + `GET /api/tasks/detect-clashes` | `SELECT` ordered by `deadline ASC`, clash badge if within 24h |
+| Edit task | Edit button on `TaskCard` row | `startEdit(task)` → `handleSubmit` | `PUT /api/tasks/:id` | `UPDATE tasks SET ... WHERE id = ?` (re-triggers clash check) |
+| Complete task | Mark-complete action | `handleSubmit` with `status: Completed` | `PUT /api/tasks/:id` | `UPDATE tasks SET status = 'Completed'` |
+| Delete task | Delete button → confirm dialog | `handleDelete` → `confirmDelete` | `DELETE /api/tasks/:id` | `DELETE FROM tasks WHERE id = ?` (cascades suggestions/alerts) |
+
+**Steps:**
+1. **Setup (one-time):** create a subject (e.g. Operating Systems) via `SubjectModal` if none exists.
+2. **Create:** open `TaskFormModal` (`openCreateTask`), enter title, category (`Exam`/`Quiz`/`Project`/`Assignment`), effort (1–10), deadline, and subject; `handleSubmit` fires `POST /api/tasks`.
+3. **Auto-prioritize:** MySQL `STORED GENERATED` columns compute `category_weight` (Exam=4, Quiz=3, Project=2, other=1) and `priority_score = category_weight × estimated_effort`; context re-fetches tasks and clashes.
+4. **View:** `TasksPage` lists tasks with subject chip, category chip, `Score`, formatted deadline, and a red `Clash` badge when `isClashing()` is true; search filters by title/category, dropdown filters by subject.
+5. **Update:** edit re-opens the modal (`startEdit` → `PUT`), complete flips `status` to `Completed`, delete goes through `DeleteConfirmationModal` (`DELETE`).
+6. **Loop:** every create/update/delete refreshes `CollisionContext`, so clash banners, calendar, and analytics stay in sync without a page reload.
 
 ---
 
